@@ -1,0 +1,7 @@
+{
+  "name": "Botler™ Assistant",
+  "description": "A friendly AI interviewer for Holiday Moments employees to map tasks, tools, and daily routines through short daily conversations.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
