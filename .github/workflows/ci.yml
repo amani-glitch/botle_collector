@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  build-and-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,3 +18,5 @@ jobs:
         run: npm install
       - name: Build
         run: npm run build
+      - name: Test
+        run: npm test
