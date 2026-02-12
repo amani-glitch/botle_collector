@@ -1,20 +1,31 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Botler 360 — Process Discovery for Holiday Moments
 
-# Run and deploy your AI Studio app
+Interview app that helps understand how Holiday Moments' team works day to day.
 
-This contains everything you need to run your app locally.
+## Setup
 
-View your app in AI Studio: https://ai.studio/apps/drive/15AYGuY8kHxVaIlGZo9Fr86dBr7gegUoy
+```bash
+npm install
+cp .env.example .env
+# Fill in your API keys in .env
+npm run dev
+```
 
-## Run Locally
+## Environment Variables
 
-**Prerequisites:**  Node.js
+| Variable | Required | Description |
+|----------|----------|-------------|
+| ANTHROPIC_API_KEY | Yes | Claude API key |
+| GOOGLE_SERVICE_ACCOUNT_JSON | No | Google Sheets service account JSON |
+| GOOGLE_SHEETS_ID | No | Google Sheets spreadsheet ID |
+| ADMIN_PASSWORD | Yes | Admin dashboard password |
+| SESSION_SECRET | Yes | Express session secret |
+| PORT | No | Server port (default: 3000) |
 
+## Deploy to Fly.io
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+```bash
+fly launch
+fly secrets set ANTHROPIC_API_KEY=sk-... ADMIN_PASSWORD=... SESSION_SECRET=...
+fly deploy
+```
