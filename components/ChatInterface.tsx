@@ -1,23 +1,25 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { getGeminiClient } from '../services/gemini';
-import { BOTLER_SYSTEM_INSTRUCTION, GET_DAY_SUGGESTIONS } from '../constants';
-import { Message, InterviewDay } from '../types';
+import { startChat, sendChatMessage } from '../services/gemini';
+import { BOTLER_SYSTEM_INSTRUCTION, GET_DAY_SUGGESTIONS, DAY_INSTRUCTIONS } from '../constants';
+import { Message, InterviewDay, UserProfile } from '../types';
 
 interface ChatInterfaceProps {
   day: InterviewDay;
   onFinish: (transcript: string) => void;
+  userProfile?: UserProfile | null;
+  previousContext?: string;
+  isFirstDay?: boolean;
 }
 
-const ChatInterface: React.FC<ChatInterfaceProps> = ({ day, onFinish }) => {
+const ChatInterface: React.FC<ChatInterfaceProps> = ({ day, onFinish, userProfile, previousContext = '', isFirstDay = true }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const chatInstanceRef = useRef<any>(null);
+  const chatIdRef = useRef<string | null>(null);
   const suggestions = GET_DAY_SUGGESTIONS(day);
 
-  // Helper to render basic bold formatting from markdown-like syntax
   const renderText = (text: string) => {
     const parts = text.split(/(\*\*.*?\*\*)/g);
     return parts.map((part, i) => {
@@ -30,24 +32,43 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ day, onFinish }) => {
 
   useEffect(() => {
     const initChat = async () => {
-      const ai = getGeminiClient();
-      const chat = ai.chats.create({
-        model: 'gemini-3-pro-preview',
-        config: {
-          systemInstruction: `${BOTLER_SYSTEM_INSTRUCTION}\n\nCURRENT FOCUS: ${day}`,
-        },
-      });
-      chatInstanceRef.current = chat;
-      
+      const profileContext = userProfile
+        ? `\n\nEMPLOYEE CONTEXT (already collected at login — do NOT re-ask these):
+- Name: ${userProfile.employee_name}
+- Role: ${userProfile.employee_role}
+- Department: ${userProfile.department}
+- Session ID: ${userProfile.session_id}
+
+Address them by name. Skip Phase 1 (Identity) since you already have their info. Start directly with Phase 2 (Day-in-the-Life).`
+        : '';
+
+      const dayInstruction = DAY_INSTRUCTIONS[day] || '';
+      const systemInstruction = `${BOTLER_SYSTEM_INSTRUCTION}${dayInstruction}${profileContext}${previousContext}`;
+
+      const triggerMessage = isFirstDay
+        ? "Hello! Please introduce yourself and briefly explain the mission."
+        : "The employee is returning for a new session. Greet them briefly by name and start today's topic.";
+
       setIsTyping(true);
-      const greeting = await chat.sendMessage({ message: "Hello! Please introduce yourself and briefly explain the mission." });
-      setIsTyping(false);
-      
-      setMessages([{
-        role: 'model',
-        text: greeting.text || "Hello. I'm Botler. I'm here to understand your workflow so we can make your job more efficient. How are things going today?",
-        timestamp: new Date()
-      }]);
+      try {
+        const { chatId, response } = await startChat(systemInstruction, triggerMessage);
+        chatIdRef.current = chatId;
+
+        setMessages([{
+          role: 'model',
+          text: response || "Hi! I'm Botler, an AI assistant from Botler 360 working with Holiday Moments. I'm here to understand how your day-to-day work flows so we can find ways to make things smoother for you. Shall we get started?",
+          timestamp: new Date()
+        }]);
+      } catch (error) {
+        console.error('Failed to init chat:', error);
+        setMessages([{
+          role: 'model',
+          text: "Sorry, I couldn't connect to the server. Please check the configuration and try again.",
+          timestamp: new Date()
+        }]);
+      } finally {
+        setIsTyping(false);
+      }
     };
 
     initChat();
@@ -59,7 +80,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ day, onFinish }) => {
 
   const handleSend = async (text: string = input) => {
     const finalInput = text.trim();
-    if (!finalInput || !chatInstanceRef.current) return;
+    if (!finalInput || !chatIdRef.current) return;
 
     const userMessage: Message = {
       role: 'user',
@@ -72,10 +93,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ day, onFinish }) => {
     setIsTyping(true);
 
     try {
-      const response = await chatInstanceRef.current.sendMessage({ message: finalInput });
+      const responseText = await sendChatMessage(chatIdRef.current, finalInput);
       const modelMessage: Message = {
         role: 'model',
-        text: response.text || "Understood. Please continue.",
+        text: responseText || "Understood. Please continue.",
         timestamp: new Date()
       };
       setMessages(prev => [...prev, modelMessage]);
@@ -96,17 +117,17 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ day, onFinish }) => {
       {/* Header */}
       <div className="px-10 py-7 border-b border-slate-200/50 flex justify-between items-center bg-white/60">
         <div className="flex items-center gap-5">
-          <div className="w-14 h-14 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-lg">
+          <div className="w-14 h-14 rounded-2xl bg-[#1a365d] text-white flex items-center justify-center shadow-lg">
             <i className="fas fa-keyboard text-2xl"></i>
           </div>
           <div>
-            <h3 className="font-extrabold text-slate-900 text-xl tracking-tight leading-none mb-1">Text Documentation</h3>
-            <p className="text-[10px] text-sky-600 font-black uppercase tracking-widest">{day.split(':')[0]}</p>
+            <h3 className="font-extrabold text-[#1a365d] text-xl tracking-tight leading-none mb-1">Text Documentation</h3>
+            <p className="text-[10px] text-[#E87722] font-black uppercase tracking-widest">{day.split(':')[0]}</p>
           </div>
         </div>
-        <button 
+        <button
           onClick={handleEndSession}
-          className="px-6 py-3 bg-[#1e293b] hover:bg-slate-900 text-white text-[11px] font-bold rounded-2xl transition-all shadow-md active:scale-95 uppercase tracking-wider"
+          className="px-6 py-3 bg-[#1a365d] hover:bg-[#122a4d] text-white text-[11px] font-bold rounded-2xl transition-all shadow-md active:scale-95 uppercase tracking-wider"
         >
           Wrap Up Session
         </button>
@@ -118,8 +139,8 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ day, onFinish }) => {
           <div key={idx} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'} animate-in slide-in-from-bottom-4 duration-500`}>
             <div className={`max-w-[85%] group`}>
               <div className={`px-6 py-4 rounded-[1.75rem] shadow-sm ${
-                msg.role === 'user' 
-                  ? 'bg-[#0ea5e9] text-white rounded-tr-none' 
+                msg.role === 'user'
+                  ? 'bg-[#E87722] text-white rounded-tr-none'
                   : 'bg-white text-slate-800 rounded-tl-none border border-slate-100 shadow-slate-200/50'
               }`}>
                 <p className="text-[15px] leading-relaxed font-medium">{renderText(msg.text)}</p>
@@ -149,25 +170,25 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({ day, onFinish }) => {
             <button
               key={i}
               onClick={() => handleSend(s)}
-              className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-full text-xs font-bold hover:bg-sky-50 hover:border-sky-300 hover:text-sky-600 transition-all shadow-sm active:scale-95"
+              className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-full text-xs font-bold hover:bg-orange-50 hover:border-[#E87722] hover:text-[#E87722] transition-all shadow-sm active:scale-95"
             >
               {s}
             </button>
           ))}
         </div>
-        
+
         <form onSubmit={(e) => { e.preventDefault(); handleSend(); }} className="flex gap-4">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
             placeholder="Type your workflow details here..."
-            className="flex-1 bg-white border border-slate-200 rounded-[1.25rem] px-8 py-5 text-[15px] font-medium focus:ring-4 focus:ring-sky-500/10 focus:border-sky-500 outline-none transition-all shadow-inner placeholder:text-slate-300"
+            className="flex-1 bg-white border border-slate-200 rounded-[1.25rem] px-8 py-5 text-[15px] font-medium focus:ring-4 focus:ring-[#E87722]/10 focus:border-[#E87722] outline-none transition-all shadow-inner placeholder:text-slate-300"
           />
-          <button 
+          <button
             type="submit"
             disabled={!input.trim() || isTyping}
-            className="w-16 h-16 bg-[#0ea5e9] text-white rounded-2xl flex items-center justify-center hover:bg-sky-600 disabled:opacity-50 transition-all shadow-xl shadow-sky-900/20 active:scale-95 group"
+            className="w-16 h-16 bg-[#E87722] text-white rounded-2xl flex items-center justify-center hover:bg-[#d06a1a] disabled:opacity-50 transition-all shadow-xl shadow-orange-200 active:scale-95 group"
           >
             <i className="fas fa-paper-plane text-xl group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform"></i>
           </button>

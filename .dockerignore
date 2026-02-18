@@ -1,0 +1,8 @@
+node_modules
+dist
+.env.local
+.git
+*.md
+scripts
+GHOST_TEST_REPORT.md
+AUDIT.md
